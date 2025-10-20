@@ -143,10 +143,31 @@ def is_optional(field):
 
 
 def template_url(url_with_params: str, params: Dict[str, str]) -> str:
-    for key, value in params.items():
-        url_with_params = url_with_params.replace("{" + key + "}", value)
+    segments = []
+    idx = 0
+    length = len(url_with_params)
+    while idx < length:
+        open_brace = url_with_params.find("{", idx)
+        if open_brace == -1:
+            break
+        close_brace = url_with_params.find("}", open_brace + 1)
+        if close_brace == -1:
+            break
+        key = url_with_params[open_brace + 1 : close_brace]
+        if key in params:
+            segments.append((idx, open_brace, url_with_params[idx:open_brace]))
+            segments.append((open_brace, close_brace + 1, params[key]))
+            idx = close_brace + 1
+        else:
+            idx = close_brace + 1
 
-    return url_with_params
+    if not segments:
+        return url_with_params
+
+    if segments[-1][1] < length:
+        segments.append((segments[-1][1], length, url_with_params[segments[-1][1] :]))
+
+    return "".join(seg[2] for seg in segments)
 
 
 def remove_suffix(input_string, suffix):
