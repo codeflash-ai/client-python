@@ -34,29 +34,34 @@ class BatchJobIn(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["model", "agent_id", "metadata", "timeout_hours"]
-        nullable_fields = ["model", "agent_id", "metadata"]
-        null_default_fields = []
+        # Convert lists to sets for faster membership tests
+        optional_fields = {"model", "agent_id", "metadata", "timeout_hours"}
+        nullable_fields = {"model", "agent_id", "metadata"}
+        null_default_fields = set()
 
         serialized = handler(self)
-
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        # Precompute fields_set for faster lookup
+        fields_set = self.__pydantic_fields_set__
+
+        model_fields = type(self).model_fields
+
+        # Avoid repeated lookups and redundant dict mutation
+        # Use list(model_fields.items()) to avoid dictionary size change during iteration if that could arise
+        for n, f in model_fields.items():
             k = f.alias or n
             val = serialized.get(k)
-            serialized.pop(k, None)
-
+            # Avoid popping from serialized, as it is not required for logic or performance
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            # Use 'n in fields_set' rather than intersection (much faster)
+            is_set = (n in fields_set) or (k in null_default_fields)  # pylint: disable=no-member
 
-            if val is not None and val != UNSET_SENTINEL:
+            # Use identity comparisons and skip redundant checks (val != UNSET_SENTINEL implies val is not None, except for optimizations)
+            if val is not None and val is not UNSET_SENTINEL:
                 m[k] = val
-            elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+            elif val is not UNSET_SENTINEL and (
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
