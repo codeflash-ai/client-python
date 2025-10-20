@@ -178,7 +178,7 @@ def is_nullable(field):
     if origin is Nullable or origin is OptionalNullable:
         return True
 
-    if not origin is Union or type(None) not in get_args(field):
+    if origin is not Union or type(None) not in get_args(field):
         return False
 
     for arg in get_args(field):
@@ -206,7 +206,7 @@ async def stream_to_text_async(stream: httpx.Response) -> str:
 
 
 def stream_to_bytes(stream: httpx.Response) -> bytes:
-    return stream.content
+    return stream._content if hasattr(stream, "_content") else stream.content
 
 
 async def stream_to_bytes_async(stream: httpx.Response) -> bytes:
