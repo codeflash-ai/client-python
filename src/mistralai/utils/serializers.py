@@ -4,7 +4,7 @@ from decimal import Decimal
 import functools
 import json
 import typing
-from typing import Any, Dict, List, Tuple, Union, get_args
+from typing import Any, Dict, Tuple, Union, get_args
 import typing_extensions
 from typing_extensions import get_origin
 
@@ -13,6 +13,9 @@ from pydantic import ConfigDict, create_model
 from pydantic_core import from_json
 
 from ..types.basemodel import BaseModel, Nullable, OptionalNullable, Unset
+
+# Cache models for (type, id of typ) pairs to avoid repeated dynamic class creation
+_unmarshaller_cache: Dict[Any, Any] = {}
 
 
 def serialize_decimal(as_str: bool):
@@ -141,11 +144,16 @@ def unmarshal_json(raw, typ: Any) -> Any:
 
 
 def unmarshal(val, typ: Any) -> Any:
-    unmarshaller = create_model(
-        "Unmarshaller",
-        body=(typ, ...),
-        __config__=ConfigDict(populate_by_name=True, arbitrary_types_allowed=True),
-    )
+    key = (typ, id(typ))
+    unmarshaller = _unmarshaller_cache.get(key)
+    if unmarshaller is None:
+        # Only create the model if it doesn't exist in cache
+        unmarshaller = create_model(
+            "Unmarshaller",
+            body=(typ, ...),
+            __config__=ConfigDict(populate_by_name=True, arbitrary_types_allowed=True),
+        )
+        _unmarshaller_cache[key] = unmarshaller
 
     m = unmarshaller(body=val)
 
@@ -178,7 +186,7 @@ def is_nullable(field):
     if origin is Nullable or origin is OptionalNullable:
         return True
 
-    if not origin is Union or type(None) not in get_args(field):
+    if origin is not Union or type(None) not in get_args(field):
         return False
 
     for arg in get_args(field):
@@ -223,10 +231,18 @@ def get_pydantic_model(data: Any, typ: Any) -> Any:
 def _contains_pydantic_model(data: Any) -> bool:
     if isinstance(data, BaseModel):
         return True
-    if isinstance(data, List):
-        return any(_contains_pydantic_model(item) for item in data)
-    if isinstance(data, Dict):
-        return any(_contains_pydantic_model(value) for value in data.values())
+    # Use type checks for List/Dict instead of isinstance for speed.
+    t = type(data)
+    if t is list:
+        for item in data:  # Avoid generator overhead for 'any'
+            if _contains_pydantic_model(item):
+                return True
+        return False
+    if t is dict:
+        for value in data.values():  # Avoid generator overhead for 'any'
+            if _contains_pydantic_model(value):
+                return True
+        return False
 
     return False
 
