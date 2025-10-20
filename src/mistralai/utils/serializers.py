@@ -14,6 +14,9 @@ from pydantic_core import from_json
 
 from ..types.basemodel import BaseModel, Nullable, OptionalNullable, Unset
 
+# Cache the dynamic model creation for each type to avoid repeated costly create_model calls
+_model_cache: dict[Any, type] = {}
+
 
 def serialize_decimal(as_str: bool):
     def serialize(d):
@@ -141,11 +144,15 @@ def unmarshal_json(raw, typ: Any) -> Any:
 
 
 def unmarshal(val, typ: Any) -> Any:
-    unmarshaller = create_model(
-        "Unmarshaller",
-        body=(typ, ...),
-        __config__=ConfigDict(populate_by_name=True, arbitrary_types_allowed=True),
-    )
+    # Use cached model if available
+    unmarshaller = _model_cache.get(typ)
+    if unmarshaller is None:
+        unmarshaller = create_model(
+            "Unmarshaller",
+            body=(typ, ...),
+            __config__=ConfigDict(populate_by_name=True, arbitrary_types_allowed=True),
+        )
+        _model_cache[typ] = unmarshaller
 
     m = unmarshaller(body=val)
 
@@ -178,7 +185,7 @@ def is_nullable(field):
     if origin is Nullable or origin is OptionalNullable:
         return True
 
-    if not origin is Union or type(None) not in get_args(field):
+    if origin is not Union or type(None) not in get_args(field):
         return False
 
     for arg in get_args(field):
