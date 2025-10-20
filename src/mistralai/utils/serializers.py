@@ -103,21 +103,32 @@ def validate_int(b):
 
 
 def validate_open_enum(is_int: bool):
-    def validate(e):
-        if e is None:
-            return None
+    if is_int:
 
-        if isinstance(e, Unset):
-            return e
+        def validate(e):
+            if e is None:
+                return None
 
-        if is_int:
+            if isinstance(e, Unset):
+                return e
+
             if not isinstance(e, int):
                 raise ValueError("Expected int")
-        else:
+
+            return e
+    else:
+
+        def validate(e):
+            if e is None:
+                return None
+
+            if isinstance(e, Unset):
+                return e
+
             if not isinstance(e, str):
                 raise ValueError("Expected string")
 
-        return e
+            return e
 
     return validate
 
@@ -178,7 +189,7 @@ def is_nullable(field):
     if origin is Nullable or origin is OptionalNullable:
         return True
 
-    if not origin is Union or type(None) not in get_args(field):
+    if origin is not Union or type(None) not in get_args(field):
         return False
 
     for arg in get_args(field):
