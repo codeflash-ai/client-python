@@ -75,16 +75,17 @@ def validate_float(f):
 
 def serialize_int(as_str: bool):
     def serialize(i):
+        typ = type(i)
         # Optional[T] is a Union[T, None]
-        if is_union(type(i)) and type(None) in get_args(type(i)) and i is None:
-            return None
+        # Fast-path: check for unset and int before slow type union introspection
         if isinstance(i, Unset):
             return i
-
-        if not isinstance(i, int):
-            raise ValueError("Expected int")
-
-        return str(i) if as_str else i
+        if isinstance(i, int):
+            return str(i) if as_str else i
+        # Union-check only if i is None (most common usage for Optional)
+        if i is None and is_union(typ) and type(None) in get_args(typ):
+            return None
+        raise ValueError("Expected int")
 
     return serialize
 
@@ -178,7 +179,7 @@ def is_nullable(field):
     if origin is Nullable or origin is OptionalNullable:
         return True
 
-    if not origin is Union or type(None) not in get_args(field):
+    if origin is not Union or type(None) not in get_args(field):
         return False
 
     for arg in get_args(field):
