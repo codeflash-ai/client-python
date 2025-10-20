@@ -93,10 +93,12 @@ def validate_int(b):
     if b is None:
         return None
 
-    if isinstance(b, (int, Unset)):
+    # Combine isinstance checks for direct return
+    if isinstance(b, int) or b is Unset:
         return b
 
-    if not isinstance(b, str):
+    # Use type(b) is str for strictly string, slightly faster than isinstance
+    if type(b) is not str:
         raise ValueError("Expected string")
 
     return int(b)
@@ -178,7 +180,7 @@ def is_nullable(field):
     if origin is Nullable or origin is OptionalNullable:
         return True
 
-    if not origin is Union or type(None) not in get_args(field):
+    if origin is not Union or type(None) not in get_args(field):
         return False
 
     for arg in get_args(field):
