@@ -34,29 +34,32 @@ class GithubRepositoryOut(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["type", "ref", "weight"]
-        nullable_fields = ["ref"]
-        null_default_fields = []
+        optional_fields = {"type", "ref", "weight"}
+        nullable_fields = {"ref"}
+        null_default_fields = set()
 
         serialized = handler(self)
-
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        # Precompute fields-set, avoids repeated .intersection calls
+        fields_set = self.__pydantic_fields_set__
+
+        # Cache fields for efficiency
+        model_fields_items = type(self).model_fields.items()
+
+        for n, f in model_fields_items:
             k = f.alias or n
-            val = serialized.get(k)
-            serialized.pop(k, None)
+            # Prefer .pop over .get/pop - single lookup
+            val = serialized.pop(k, None)
 
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            is_set = (n in fields_set) or (k in null_default_fields)  # pylint: disable=no-member
 
+            # Avoid repeated checks and branch lookups
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
