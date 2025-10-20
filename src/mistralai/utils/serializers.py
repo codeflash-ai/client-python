@@ -14,6 +14,8 @@ from pydantic_core import from_json
 
 from ..types.basemodel import BaseModel, Nullable, OptionalNullable, Unset
 
+_model_cache = {}
+
 
 def serialize_decimal(as_str: bool):
     def serialize(d):
@@ -157,11 +159,15 @@ def marshal_json(val, typ):
     if is_nullable(typ) and val is None:
         return "null"
 
-    marshaller = create_model(
-        "Marshaller",
-        body=(typ, ...),
-        __config__=ConfigDict(populate_by_name=True, arbitrary_types_allowed=True),
-    )
+    cache_key = id(typ)
+    marshaller = _model_cache.get(cache_key)
+    if marshaller is None:
+        marshaller = create_model(
+            "Marshaller",
+            body=(typ, ...),
+            __config__=ConfigDict(populate_by_name=True, arbitrary_types_allowed=True),
+        )
+        _model_cache[cache_key] = marshaller
 
     m = marshaller(body=val)
 
@@ -170,7 +176,7 @@ def marshal_json(val, typ):
     if len(d) == 0:
         return ""
 
-    return json.dumps(d[next(iter(d))], separators=(",", ":"))
+    return json.dumps(d.pop("body"), separators=(",", ":"))
 
 
 def is_nullable(field):
@@ -178,7 +184,7 @@ def is_nullable(field):
     if origin is Nullable or origin is OptionalNullable:
         return True
 
-    if not origin is Union or type(None) not in get_args(field):
+    if origin is not Union or type(None) not in get_args(field):
         return False
 
     for arg in get_args(field):
