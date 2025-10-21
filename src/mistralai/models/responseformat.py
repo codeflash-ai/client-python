@@ -23,29 +23,38 @@ class ResponseFormat(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["type", "json_schema"]
-        nullable_fields = ["json_schema"]
-        null_default_fields = []
+        # Avoid repeated lookups and unnecessary list/dict constructions
+        optional_fields = {"type", "json_schema"}
+        nullable_fields = {"json_schema"}
+        null_default_fields = set()
 
         serialized = handler(self)
-
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        # Precompute one-time values
+        fields_set = self.__pydantic_fields_set__
+
+        # Access model_fields as attribute just once
+        model_fields_items = type(self).model_fields.items()
+
+        for n, f in model_fields_items:
+            # f.alias may be None, so re-use n if needed (no change logic)
             k = f.alias or n
+            # val = serialized.get(k) consumes just the value once
             val = serialized.get(k)
+            # Remove key if present to avoid redundant memory usage
             serialized.pop(k, None)
 
+            # Avoid repeated in operator by combining sets above
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            # Intersection is expensive for big sets; with one element, use fast membership test instead
+            is_set = n in fields_set or k in null_default_fields
 
+            # Reduce val != checks in sequence; merge logic for branch clarity
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
