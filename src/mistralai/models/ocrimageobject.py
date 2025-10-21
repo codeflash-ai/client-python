@@ -47,37 +47,43 @@ class OCRImageObject(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["image_base64", "image_annotation"]
-        nullable_fields = [
+        # Precompute sets for faster membership tests
+        optional_fields = {"image_base64", "image_annotation"}
+        nullable_fields = {
             "top_left_x",
             "top_left_y",
             "bottom_right_x",
             "bottom_right_y",
             "image_base64",
             "image_annotation",
-        ]
-        null_default_fields = []
+        }
+        null_default_fields = set()  # Empty as original
 
         serialized = handler(self)
 
+        # Avoid repeated lookups by storing intersection set once
+        fields_set = self.__pydantic_fields_set__
+
         m = {}
-
-        for n, f in type(self).model_fields.items():
+        # Use items() and direct iteration instead of repeated lookups
+        # This reduces attribute lookups and uses local variables where possible
+        model_fields = type(self).model_fields
+        for n, f in model_fields.items():
             k = f.alias or n
-            val = serialized.get(k)
-            serialized.pop(k, None)
 
+            val = serialized.pop(k, None)
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
 
+            # Avoid calling intersection every iteration;
+            # check presence of n in the set, which is faster.
+            is_set = (n in fields_set) or (k in null_default_fields)
+
+            # Branch structure retained, rewritten for fewer comparisons
+            # Use 'is not' for None and '!=' for sentinel
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
-            elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
-            ):
-                m[k] = val
+            elif val != UNSET_SENTINEL:
+                if (k not in optional_fields) or (optional_nullable and is_set):
+                    m[k] = val
 
         return m
