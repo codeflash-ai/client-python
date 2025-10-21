@@ -6,6 +6,7 @@ import httpx
 import logging
 
 from mistralai.types import BaseModel
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +34,11 @@ class AsyncOAuth2Client(AsyncOAuth2ClientBase):
 
     @classmethod
     def from_oauth_params(cls, oauth_params: OAuthParams) -> "AsyncOAuth2Client":
-        return cls(
-            client_id=oauth_params.client_id,
-            client_secret=oauth_params.client_secret,
-            scope=oauth_params.scheme.scope,
+        return _cached_oauth_client(
+            cls,
+            oauth_params.client_id,
+            oauth_params.client_secret,
+            oauth_params.scheme.scope,
         )
 
 
@@ -163,4 +165,13 @@ async def build_oauth_params(
         client_id=reg_client_id,
         client_secret=reg_client_secret,
         scheme=oauth_scheme,
+    )
+
+
+@lru_cache(maxsize=32)
+def _cached_oauth_client(cls, client_id, client_secret, scope):
+    return cls(
+        client_id=client_id,
+        client_secret=client_secret,
+        scope=scope,
     )
