@@ -30,29 +30,32 @@ class SharingOut(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["user_id"]
-        nullable_fields = ["user_id"]
-        null_default_fields = []
+        optional_fields = {"user_id"}
+        nullable_fields = {"user_id"}
+        null_default_fields = set()
 
         serialized = handler(self)
-
         m = {}
+        model_fields = type(self).model_fields
+        fields_set = self.__pydantic_fields_set__
 
-        for n, f in type(self).model_fields.items():
+        # Precompute sets and checks for efficiency.
+        # No need to recompute per-field intersections/containment.
+        optional_nullable_fields = optional_fields & nullable_fields
+
+        for n, f in model_fields.items():
             k = f.alias or n
-            val = serialized.get(k)
-            serialized.pop(k, None)
 
-            optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            # Combined pop/get for speed and clarity
+            val = serialized.pop(k, None)
+
+            # Only need to check if the field was set or belongs to null_default_fields
+            is_set = (n in fields_set) or (k in null_default_fields)
 
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (k in optional_nullable_fields and is_set)
             ):
                 m[k] = val
 
