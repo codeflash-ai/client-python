@@ -46,30 +46,33 @@ class AgentHandoffEntry(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["object", "type", "created_at", "completed_at", "id"]
-        nullable_fields = ["completed_at"]
-        null_default_fields = []
+        optional_fields = {"object", "type", "created_at", "completed_at", "id"}
+        nullable_fields = {"completed_at"}
+        null_default_fields = set()
 
         serialized = handler(self)
-
         m = {}
+        model_fields = type(self).model_fields
 
-        for n, f in type(self).model_fields.items():
+        fields_set = self.__pydantic_fields_set__
+
+        # Pre-calculate which fields are optional and optional_nullable for fast lookup
+        optional_nullable_fields = optional_fields & nullable_fields
+
+        for n, f in model_fields.items():
             k = f.alias or n
-            val = serialized.get(k)
-            serialized.pop(k, None)
+            val = serialized.pop(k, None)
 
-            optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            # This is set iff the field is in fields_set or in null_default_fields
+            is_set = n in fields_set or k in null_default_fields
 
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
-            elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
-            ):
-                m[k] = val
+            elif val != UNSET_SENTINEL:
+                # Perform using precomputed sets for lookup speed
+                if k not in optional_fields or (
+                    k in optional_nullable_fields and is_set
+                ):
+                    m[k] = val
 
         return m
