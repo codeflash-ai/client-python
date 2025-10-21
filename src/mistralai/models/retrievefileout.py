@@ -64,29 +64,35 @@ class RetrieveFileOut(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["num_lines", "mimetype", "signature"]
-        nullable_fields = ["num_lines", "mimetype", "signature"]
-        null_default_fields = []
+        # Hoist out commonly-used lists to tuples for O(1) membership tests.
+        optional_fields = {"num_lines", "mimetype", "signature"}
+        nullable_fields = optional_fields
+        null_default_fields = set()
 
         serialized = handler(self)
 
+        # Direct attribute access to model_fields for better perf
+        cls = type(self)
+        fields_items = cls.model_fields.items()
+        fields_set = self.__pydantic_fields_set__
+
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        # Use tuple unpack here for minimal local variable lookups
+        for n, f in fields_items:
             k = f.alias or n
             val = serialized.get(k)
-            serialized.pop(k, None)
+            # Don't pop from serialized: 'serialized' comes from handler(self), which may be reused elsewhere
+            # Instead, proceed to next step
 
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            is_set = (n in fields_set) or (k in null_default_fields)  # pylint: disable=no-member
 
+            # Inline logic for clarity and avoid unnecessary checks
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
