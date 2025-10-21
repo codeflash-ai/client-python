@@ -33,7 +33,8 @@ class JobMetadataOut(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = [
+        # The lists are used for fast lookup, so convert to set for O(1) "in"
+        optional_fields = {
             "expected_duration_seconds",
             "cost",
             "cost_currency",
@@ -41,37 +42,31 @@ class JobMetadataOut(BaseModel):
             "train_tokens",
             "data_tokens",
             "estimated_start_time",
-        ]
-        nullable_fields = [
-            "expected_duration_seconds",
-            "cost",
-            "cost_currency",
-            "train_tokens_per_step",
-            "train_tokens",
-            "data_tokens",
-            "estimated_start_time",
-        ]
-        null_default_fields = []
+        }
+        nullable_fields = optional_fields
+        null_default_fields = set()
 
         serialized = handler(self)
 
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        fields_set = self.__pydantic_fields_set__  # Cache the attribute lookup
+        model_fields = type(self).model_fields  # Cache the attribute lookup
+
+        # Avoid repeated lookup of keys: use .items() directly
+        for n, f in model_fields.items():
             k = f.alias or n
             val = serialized.get(k)
-            serialized.pop(k, None)
+            # Instead of .pop for each field (costly as dict shrinks), only use .get
 
-            optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            optional_nullable = k in optional_fields  # Using sets, both are the same
+            # Fast branch: intersection for one element is same as n in fields_set
+            is_set = n in fields_set or k in null_default_fields  # pylint: disable=no-member
 
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
