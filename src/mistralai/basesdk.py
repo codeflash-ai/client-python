@@ -38,7 +38,14 @@ class BaseSDK:
         if url_variables is None:
             url_variables = sdk_variables
 
-        return utils.template_url(base_url, url_variables)
+        # Inline optimized template_url to avoid function call overhead
+        # and repeated allocations in a high-frequency hotspot.
+        url = base_url
+        for key, value in url_variables.items():
+            placeholder = "{" + key + "}"
+            if placeholder in url:
+                url = url.replace(placeholder, value)
+        return url
 
     def _build_request_async(
         self,

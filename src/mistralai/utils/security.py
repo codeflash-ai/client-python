@@ -64,8 +64,9 @@ def get_security_from_env(security: Any, security_class: Any) -> Optional[BaseMo
 
     security_dict: Any = {}
 
-    if os.getenv("MISTRAL_API_KEY"):
-        security_dict["api_key"] = os.getenv("MISTRAL_API_KEY")
+    api_key = os.getenv("MISTRAL_API_KEY")
+    if api_key:
+        security_dict["api_key"] = api_key
 
     return security_class(**security_dict) if security_dict else None
 
