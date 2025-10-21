@@ -47,29 +47,32 @@ class EmbeddingRequest(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["output_dimension", "output_dtype", "encoding_format"]
-        nullable_fields = ["output_dimension"]
-        null_default_fields = []
+        optional_fields = {"output_dimension", "output_dtype", "encoding_format"}
+        nullable_fields = {"output_dimension"}
+        null_default_fields = set()
+
+        # Precompute set for fields_set to avoid attribute lookup in the loop
+        fields_set = self.__pydantic_fields_set__  # pylint: disable=no-member
+
+        # Fetch model_fields only once, static reference
+        model_fields = type(self).model_fields
 
         serialized = handler(self)
-
+        # For performance, pop all entries only if we need them. We'll collect used keys to minimize pop cost.
         m = {}
-
-        for n, f in type(self).model_fields.items():
+        # Only iterate once over items instead of type(self).model_fields.items()
+        for n, f in model_fields.items():
             k = f.alias or n
-            val = serialized.get(k)
-            serialized.pop(k, None)
+            # Use pop with default to avoid KeyError, but only once per loop
+            val = serialized.pop(k, None)
 
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            is_set = (n in fields_set) or (k in null_default_fields)
 
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
