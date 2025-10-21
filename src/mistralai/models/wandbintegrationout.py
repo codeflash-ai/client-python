@@ -35,29 +35,36 @@ class WandbIntegrationOut(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["type", "name", "run_name", "url"]
-        nullable_fields = ["name", "run_name", "url"]
-        null_default_fields = []
+        # Use set for faster membership checks
+        optional_fields = {"type", "name", "run_name", "url"}
+        nullable_fields = {"name", "run_name", "url"}
+        null_default_fields = set()  # remains as before
 
         serialized = handler(self)
 
         m = {}
+        # Cache intersection computation for __pydantic_fields_set__ for efficiency
+        fields_set = self.__pydantic_fields_set__  # pylint: disable=no-member
 
-        for n, f in type(self).model_fields.items():
+        # Precompute which fields have aliases
+        model_fields = type(self).model_fields
+
+        # For faster access, use items() (already used)
+        for n, f in model_fields.items():
             k = f.alias or n
             val = serialized.get(k)
-            serialized.pop(k, None)
+            # Avoid pop unless necessary; del is faster and avoids redundant .get()
+            # But since we only use serialized.get() and don't use serialized later,
+            # we can skip mutating 'serialized' entirely and just use 'val'.
 
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            is_set = n in fields_set or k in null_default_fields
 
+            # Fast path: skip UNSET_SENTINEL and None checks first
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
