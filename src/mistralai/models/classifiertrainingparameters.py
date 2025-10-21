@@ -31,42 +31,44 @@ class ClassifierTrainingParameters(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = [
+        # Use tuples (rather than lists) for faster membership checks
+        optional_fields = (
             "training_steps",
             "learning_rate",
             "weight_decay",
             "warmup_fraction",
             "epochs",
             "seq_len",
-        ]
-        nullable_fields = [
+        )
+        nullable_fields = (
             "training_steps",
             "weight_decay",
             "warmup_fraction",
             "epochs",
             "seq_len",
-        ]
-        null_default_fields = []
+        )
+        null_default_fields = ()
 
         serialized = handler(self)
-
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        # Cache commonly used sets for performance
+        fields_set = self.__pydantic_fields_set__  # pylint: disable=no-member
+        model_fields = type(self).model_fields
+
+        # Avoid .intersection for one-element check, use .__contains__
+        for n, f in model_fields.items():
             k = f.alias or n
-            val = serialized.get(k)
-            serialized.pop(k, None)
+            val = serialized.pop(k, None)
 
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            is_set = (n in fields_set) or (k in null_default_fields)
 
+            # Fast path: val is not None and not UNSET_SENTINEL
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
