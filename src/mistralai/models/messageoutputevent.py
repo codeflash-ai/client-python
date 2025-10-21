@@ -56,7 +56,7 @@ class MessageOutputEvent(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = [
+        optional_fields = {
             "type",
             "created_at",
             "output_index",
@@ -64,29 +64,31 @@ class MessageOutputEvent(BaseModel):
             "model",
             "agent_id",
             "role",
-        ]
-        nullable_fields = ["model", "agent_id"]
-        null_default_fields = []
+        }
+        nullable_fields = {"model", "agent_id"}
+        null_default_fields = set()
 
         serialized = handler(self)
-
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        model_fields = type(self).model_fields
+        pydantic_fields_set = self.__pydantic_fields_set__
+        # Avoid recomputing intersection repeatedly
+        pydantic_fields_set_lookup = pydantic_fields_set
+
+        # Use local variables for frequently accessed fields to reduce attribute access overhead
+        for n, f in model_fields.items():
             k = f.alias or n
             val = serialized.get(k)
-            serialized.pop(k, None)
-
+            # Don't pop from 'serialized', just leave it (since the popped values aren't used)
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            is_set = n in pydantic_fields_set_lookup or k in null_default_fields  # pylint: disable=no-member
 
+            # Fast eligibility check
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
