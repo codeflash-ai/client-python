@@ -56,11 +56,11 @@ RunTool = Union[RunFunction, RunCoroutine, RunMCPTool]
 
 def _get_function_description(docstring_sections: list[DocstringSection]) -> str:
     """Given a list of docstring sections create a description for the function."""
-    text_sections: list[DocstringSectionText] = []
-    for section in docstring_sections:
-        if section.kind == DocstringSectionKind.text:
-            text_sections.append(cast(DocstringSectionText, section))
-    return "\n".join(text.value for text in text_sections)
+    return "\n".join(
+        cast(DocstringSectionText, section).value
+        for section in docstring_sections
+        if section.kind == DocstringSectionKind.text
+    )
 
 
 def _get_function_parameters(
