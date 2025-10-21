@@ -85,7 +85,8 @@ class ConversationStreamRequest(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = [
+        # Convert lists to sets for faster membership checks
+        optional_fields_set = {
             "stream",
             "store",
             "handoff_execution",
@@ -96,8 +97,8 @@ class ConversationStreamRequest(BaseModel):
             "description",
             "agent_id",
             "model",
-        ]
-        nullable_fields = [
+        }
+        nullable_fields_set = {
             "store",
             "handoff_execution",
             "instructions",
@@ -107,28 +108,33 @@ class ConversationStreamRequest(BaseModel):
             "description",
             "agent_id",
             "model",
-        ]
-        null_default_fields = []
+        }
+        null_default_fields_set = set()  # remains empty
 
         serialized = handler(self)
 
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        # Precompute the intersection once for all fields where needed
+        fields_set = self.__pydantic_fields_set__  # pylint: disable=no-member
+
+        # Access model_fields only once, and avoid repeated lookups
+        model_fields = type(self).model_fields
+
+        # Iterate directly over the items for faster access
+        for n, f in model_fields.items():
             k = f.alias or n
+            # Avoid .pop() and use .get() only; we can ignore removing from serialized since we do not use it afterwards
             val = serialized.get(k)
-            serialized.pop(k, None)
 
-            optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            optional_nullable = k in optional_fields_set and k in nullable_fields_set
+            is_set = (n in fields_set) or (k in null_default_fields_set)
 
+            # The logic below remains unchanged, but set-based lookups are much faster, and we avoid mutating serialized
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields_set or (optional_nullable and is_set)
             ):
                 m[k] = val
 
