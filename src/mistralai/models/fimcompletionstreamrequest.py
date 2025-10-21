@@ -79,7 +79,8 @@ class FIMCompletionStreamRequest(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = [
+        # Precompute lookup sets for faster membership checks
+        optional_fields = {
             "temperature",
             "top_p",
             "max_tokens",
@@ -88,35 +89,37 @@ class FIMCompletionStreamRequest(BaseModel):
             "random_seed",
             "suffix",
             "min_tokens",
-        ]
-        nullable_fields = [
+        }
+        nullable_fields = {
             "temperature",
             "max_tokens",
             "random_seed",
             "suffix",
             "min_tokens",
-        ]
-        null_default_fields = []
+        }
+        null_default_fields = set()  # unchanged
 
         serialized = handler(self)
-
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        # Precompute intersection once for all nullable fields
+        fields_set = self.__pydantic_fields_set__  # pylint: disable=no-member
+
+        # Avoid repeated lookups; use items list directly
+        model_fields_items = type(self).model_fields.items()
+
+        for n, f in model_fields_items:
             k = f.alias or n
-            val = serialized.get(k)
-            serialized.pop(k, None)
+            val = serialized.pop(k, None)  # retrieves and removes
 
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            is_set = n in fields_set or k in null_default_fields
 
+            # Reduce conditional branches and branch complexity
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
