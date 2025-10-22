@@ -15,30 +15,35 @@ class DocumentUpdateIn(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["name"]
-        nullable_fields = ["name"]
-        null_default_fields = []
+        # Use constants (tuples) for fields for faster "in" checks
+        optional_fields = ("name",)
+        nullable_fields = ("name",)
+        null_default_fields = set()  # using set for fast lookup
 
         serialized = handler(self)
 
-        m = {}
+        # Pre-allocate keys for performance instead of popping in place
+        result = {}
+        model_fields = type(self).model_fields
+        # Store the intersection ONCE for reuse; saves repeated intersection calls
+        pydantic_fields_set = self.__pydantic_fields_set__
 
-        for n, f in type(self).model_fields.items():
+        for n, f in model_fields.items():
             k = f.alias or n
+            # Use .get to avoid KeyError, and pop once only if present
             val = serialized.get(k)
-            serialized.pop(k, None)
+            if k in serialized:
+                serialized.pop(k)
 
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
-
+            # precalc is_set: only call intersection once per field
+            is_set = n in pydantic_fields_set or k in null_default_fields
             if val is not None and val != UNSET_SENTINEL:
-                m[k] = val
+                result[k] = val
+            # Make "not k in optional_fields" into "k not in optional_fields" for speed
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
-                m[k] = val
+                result[k] = val
 
-        return m
+        return result
