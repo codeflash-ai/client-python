@@ -38,7 +38,12 @@ class BaseSDK:
         if url_variables is None:
             url_variables = sdk_variables
 
-        return utils.template_url(base_url, url_variables)
+        if url_variables:
+            try:
+                return base_url.format(**url_variables)
+            except (KeyError, ValueError):
+                return utils.template_url(base_url, url_variables)
+        return base_url
 
     def _build_request_async(
         self,
