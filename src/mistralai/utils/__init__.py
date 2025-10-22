@@ -182,9 +182,15 @@ def __getattr__(attr_name: str) -> object:
             f"no {attr_name} found in _dynamic_imports, module name -> {__name__} "
         )
 
+    cache_key = f"__cached__{attr_name}"
+    if cache_key in globals():
+        return globals()[cache_key]
+
     try:
         module = dynamic_import(module_name)
-        return getattr(module, attr_name)
+        result = getattr(module, attr_name)
+        globals()[cache_key] = result
+        return result
     except ImportError as e:
         raise ImportError(
             f"Failed to import {attr_name} from {module_name}: {e}"
