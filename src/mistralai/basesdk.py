@@ -31,13 +31,10 @@ class BaseSDK:
 
     def _get_url(self, base_url, url_variables):
         sdk_url, sdk_variables = self.sdk_configuration.get_server_details()
-
         if base_url is None:
             base_url = sdk_url
-
         if url_variables is None:
             url_variables = sdk_variables
-
         return utils.template_url(base_url, url_variables)
 
     def _build_request_async(
@@ -228,7 +225,10 @@ class BaseSDK:
         client = self.sdk_configuration.client
         logger = self.sdk_configuration.debug_logger
 
-        hooks = self.sdk_configuration.__dict__["_hooks"]
+        # Avoid repeated __dict__ lookup by direct access or getattr fallback
+        hooks = getattr(self.sdk_configuration, "_hooks", None)
+        if hooks is None:
+            hooks = self.sdk_configuration.__dict__["_hooks"]
 
         def do():
             http_res = None
@@ -241,10 +241,8 @@ class BaseSDK:
                     req.headers,
                     get_body_content(req),
                 )
-
                 if client is None:
                     raise ValueError("client is required")
-
                 http_res = client.send(req, stream=stream)
             except Exception as e:
                 _, e = hooks.after_error(AfterErrorContext(hook_ctx), None, e)

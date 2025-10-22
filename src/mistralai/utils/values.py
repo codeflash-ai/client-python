@@ -52,8 +52,10 @@ def match_status_codes(status_codes: List[str], status_code: int) -> bool:
 
 T = TypeVar("T")
 
+
 def cast_partial(typ):
     return partial(cast, typ)
+
 
 def get_global_from_env(
     value: Optional[T], env_key: str, type_cast: Callable[[str], T]
@@ -73,8 +75,10 @@ def match_response(
     response: Response, code: Union[str, List[str]], content_type: str
 ) -> bool:
     codes = code if isinstance(code, list) else [code]
+    # Fetch content-type only once for efficiency
+    resp_content_type = response.headers.get("content-type", "application/octet-stream")
     return match_status_codes(codes, response.status_code) and match_content_type(
-        response.headers.get("content-type", "application/octet-stream"), content_type
+        resp_content_type, content_type
     )
 
 

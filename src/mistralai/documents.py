@@ -432,7 +432,7 @@ class Documents(BaseSDK):
         timeout_ms: Optional[int] = None,
         http_headers: Optional[Mapping[str, str]] = None,
     ) -> models.DocumentOut:
-        r"""Retrieve the metadata of a specific document.
+        """Retrieve the metadata of a specific document.
 
         Given a library and a document in this library, you can retrieve the metadata of that document.
 
@@ -443,14 +443,12 @@ class Documents(BaseSDK):
         :param timeout_ms: Override the default request timeout configuration for this method in milliseconds
         :param http_headers: Additional headers to set or replace on requests.
         """
-        base_url = None
+        base_url = server_url if server_url is not None else None
         url_variables = None
         if timeout_ms is None:
             timeout_ms = self.sdk_configuration.timeout_ms
 
-        if server_url is not None:
-            base_url = server_url
-        else:
+        if base_url is None:
             base_url = self._get_url(base_url, url_variables)
 
         request = models.LibrariesDocumentsGetV1Request(
@@ -474,9 +472,8 @@ class Documents(BaseSDK):
             timeout_ms=timeout_ms,
         )
 
-        if retries == UNSET:
-            if self.sdk_configuration.retry_config is not UNSET:
-                retries = self.sdk_configuration.retry_config
+        if retries == UNSET and self.sdk_configuration.retry_config is not UNSET:
+            retries = self.sdk_configuration.retry_config
 
         retry_config = None
         if isinstance(retries, utils.RetryConfig):
