@@ -31,29 +31,33 @@ class UserMessage(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["role"]
-        nullable_fields = ["content"]
-        null_default_fields = []
+        # Keep these as tuple for O(1) membership test and to avoid repeated allocations
+        optional_fields = ("role",)
+        nullable_fields = ("content",)
+        null_default_fields = ()
 
         serialized = handler(self)
 
         m = {}
+        self_fields_set = self.__pydantic_fields_set__
+        model_fields = type(self).model_fields
 
-        for n, f in type(self).model_fields.items():
+        # Only compute set intersection when necessary
+        for n, f in model_fields.items():
             k = f.alias or n
             val = serialized.get(k)
             serialized.pop(k, None)
 
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+
+            # Since __pydantic_fields_set__ is a set, use direct containment,
+            # which is O(1) instead of building an intermediate set
+            is_set = (n in self_fields_set) or (k in null_default_fields)  # pylint: disable=no-member
 
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
