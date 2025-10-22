@@ -23,6 +23,8 @@ from .values import (
 )
 from .forms import _populate_form
 
+_type_hints_cache: Dict[type, Dict[str, type]] = {}
+
 
 def get_query_params(
     query_params: Any,
@@ -49,7 +51,12 @@ def _populate_query_params(
         return globals_already_populated
 
     param_fields: Dict[str, FieldInfo] = query_params.__class__.model_fields
-    param_field_types = get_type_hints(query_params.__class__)
+    if query_params.__class__ in _type_hints_cache:
+        param_field_types = _type_hints_cache[query_params.__class__]
+    else:
+        param_field_types = get_type_hints(query_params.__class__)
+        _type_hints_cache[query_params.__class__] = param_field_types
+
     for name in param_fields:
         if name in skip_fields:
             continue
