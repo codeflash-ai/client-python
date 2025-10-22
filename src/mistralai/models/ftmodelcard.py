@@ -78,7 +78,8 @@ class FTModelCard(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = [
+        # Use sets for fast lookup, as these are checked repeatedly in a loop
+        optional_fields = {
             "object",
             "created",
             "owned_by",
@@ -91,35 +92,40 @@ class FTModelCard(BaseModel):
             "default_model_temperature",
             "type",
             "archived",
-        ]
-        nullable_fields = [
+        }
+        nullable_fields = {
             "name",
             "description",
             "deprecation",
             "deprecation_replacement_model",
             "default_model_temperature",
-        ]
-        null_default_fields = []
+        }
+        null_default_fields = set()  # remains empty as original
 
         serialized = handler(self)
 
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        model_fields = type(self).model_fields
+        fields_set = self.__pydantic_fields_set__
+
+        # Precompute which keys are both optional and nullable for quick lookup
+        optional_nullable = optional_fields & nullable_fields
+
+        for n, f in model_fields.items():
             k = f.alias or n
-            val = serialized.get(k)
-            serialized.pop(k, None)
+            # Fast pop from dict: avoid searching twice, use pop w/ default
+            val = serialized.pop(k, None)
 
-            optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            is_optional_field = k in optional_fields
+            is_optional_nullable = k in optional_nullable
+            is_set = n in fields_set or k in null_default_fields
 
+            # Two main conditions:
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                not is_optional_field or (is_optional_nullable and is_set)
             ):
                 m[k] = val
 
