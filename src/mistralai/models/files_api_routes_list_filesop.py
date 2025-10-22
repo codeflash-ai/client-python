@@ -60,36 +60,39 @@ class FilesAPIRoutesListFilesRequest(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = [
+        # Precompute sets for fast lookup
+        optional_fields = {
             "page",
             "page_size",
             "sample_type",
             "source",
             "search",
             "purpose",
-        ]
-        nullable_fields = ["sample_type", "source", "search", "purpose"]
-        null_default_fields = []
+        }
+        nullable_fields = {"sample_type", "source", "search", "purpose"}
+        null_default_fields = set()
 
+        # Use local vars which are faster to access
+        self_fields_set = self.__pydantic_fields_set__
+        model_fields = type(self).model_fields
         serialized = handler(self)
-
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        # Precompute intersection for all possible fields to avoid repetitive .intersection calls
+        set_fields = self_fields_set
+        for n, f in model_fields.items():
             k = f.alias or n
-            val = serialized.get(k)
-            serialized.pop(k, None)
+            # Get and remove the value from serialized in one step, use pop for efficiency
+            val = serialized.pop(k, None)
 
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            is_set = n in set_fields or k in null_default_fields  # pylint: disable=no-member
 
+            # Use fast-path checks and avoid multiple comparisons
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
