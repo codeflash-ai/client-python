@@ -22,6 +22,7 @@ from .values import (
     _val_to_string,
 )
 from .forms import _populate_form
+from functools import lru_cache
 
 
 def get_query_params(
@@ -49,7 +50,7 @@ def _populate_query_params(
         return globals_already_populated
 
     param_fields: Dict[str, FieldInfo] = query_params.__class__.model_fields
-    param_field_types = get_type_hints(query_params.__class__)
+    param_field_types = _cached_type_hints(query_params.__class__)
     for name in param_fields:
         if name in skip_fields:
             continue
@@ -203,3 +204,8 @@ def _populate_delimited_query_params(
         delimiter,
         query_param_values,
     )
+
+
+@lru_cache(maxsize=128)
+def _cached_type_hints(cls):
+    return get_type_hints(cls)
