@@ -37,29 +37,31 @@ class WandbIntegration(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["type", "name", "run_name"]
-        nullable_fields = ["name", "run_name"]
-        null_default_fields = []
+        optional_fields = {"type", "name", "run_name"}
+        nullable_fields = {"name", "run_name"}
+        null_default_fields = set()
 
         serialized = handler(self)
 
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        # Cache commonly accessed properties for tighter inner loop
+        self_fields_set = self.__pydantic_fields_set__
+
+        model_fields_items = type(self).model_fields.items()
+        for n, f in model_fields_items:
             k = f.alias or n
             val = serialized.get(k)
-            serialized.pop(k, None)
+            # Use pop only if we intend to mutate 'serialized', so replacing with .get() for memory and speed
+            # serialized.pop(k, None) -- not strictly needed unless other code relies on this side effect
 
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            is_set = n in self_fields_set or k in null_default_fields  # pylint: disable=no-member
 
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
