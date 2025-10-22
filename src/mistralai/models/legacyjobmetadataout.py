@@ -68,7 +68,8 @@ class LegacyJobMetadataOut(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = [
+        # Precompute sets for faster lookup
+        optional_fields = {
             "expected_duration_seconds",
             "cost",
             "cost_currency",
@@ -80,8 +81,8 @@ class LegacyJobMetadataOut(BaseModel):
             "epochs",
             "training_steps",
             "object",
-        ]
-        nullable_fields = [
+        }
+        nullable_fields = {
             "expected_duration_seconds",
             "cost",
             "cost_currency",
@@ -91,28 +92,31 @@ class LegacyJobMetadataOut(BaseModel):
             "estimated_start_time",
             "epochs",
             "training_steps",
-        ]
-        null_default_fields = []
+        }
+        null_default_fields = set()
 
         serialized = handler(self)
-
         m = {}
+
+        # Precompute which fields are set for faster membership tests
+        fields_set = self.__pydantic_fields_set__
+        # Avoid repeated intersection computation by building null_default_fields membership once
+        null_default_fields_in_fields_set = fields_set.intersection(null_default_fields)
 
         for n, f in type(self).model_fields.items():
             k = f.alias or n
+            # Avoid unnecessary pop (and dictionary mutation) by just using get
             val = serialized.get(k)
-            serialized.pop(k, None)
 
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            is_set = (n in fields_set) or (k in null_default_fields)
 
+            # Fast path: val is set and not UNSET_SENTINEL
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
+            # Only calculate logic if val might need to be included
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
