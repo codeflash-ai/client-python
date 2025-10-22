@@ -29,27 +29,21 @@ class MCPClientProtocol(Protocol):
 
     _name: str
 
-    async def initialize(self, exit_stack: Optional[AsyncExitStack]) -> None:
-        ...
+    async def initialize(self, exit_stack: Optional[AsyncExitStack]) -> None: ...
 
-    async def aclose(self) -> None:
-        ...
+    async def aclose(self) -> None: ...
 
-    async def get_tools(self) -> list[FunctionTool]:
-        ...
+    async def get_tools(self) -> list[FunctionTool]: ...
 
     async def execute_tool(
         self, name: str, arguments: dict
-    ) -> list[TextChunkTypedDict]:
-        ...
+    ) -> list[TextChunkTypedDict]: ...
 
     async def get_system_prompt(
         self, name: str, arguments: dict[str, Any]
-    ) -> MCPSystemPrompt:
-        ...
+    ) -> MCPSystemPrompt: ...
 
-    async def list_system_prompts(self) -> ListPromptsResult:
-        ...
+    async def list_system_prompts(self) -> ListPromptsResult: ...
 
 
 class MCPClientBase(MCPClientProtocol):
@@ -123,22 +117,37 @@ class MCPClientBase(MCPClientProtocol):
 
     async def initialize(self, exit_stack: Optional[AsyncExitStack] = None) -> None:
         """Initialize the MCP session."""
-        # client is already initialized so return
         if self._is_initialized:
             return
+        # Prefer using AsyncExitStack as a context manager for correct resource cleanup
+        # This avoids accidental leaks if initialization fails
         if exit_stack is None:
+            # Use AsyncExitStack async context manager to ensure cleanup if initialization fails
             self._exit_stack = AsyncExitStack()
-            exit_stack = self._exit_stack
-        stdio_transport = await self._get_transport(exit_stack=exit_stack)
-        mcp_session = await exit_stack.enter_async_context(
-            ClientSession(
-                read_stream=stdio_transport[0],
-                write_stream=stdio_transport[1],
+            async with self._exit_stack as stack:
+                stdio_transport = await self._get_transport(exit_stack=stack)
+                mcp_session = await stack.enter_async_context(
+                    ClientSession(
+                        read_stream=stdio_transport[0],
+                        write_stream=stdio_transport[1],
+                    )
+                )
+                await mcp_session.initialize()
+                self._session = mcp_session
+                self._is_initialized = True
+                # keep exit stack alive after leaving context: transfer ownership
+                self._exit_stack = stack
+        else:
+            stdio_transport = await self._get_transport(exit_stack=exit_stack)
+            mcp_session = await exit_stack.enter_async_context(
+                ClientSession(
+                    read_stream=stdio_transport[0],
+                    write_stream=stdio_transport[1],
+                )
             )
-        )
-        await mcp_session.initialize()
-        self._session = mcp_session
-        self._is_initialized = True
+            await mcp_session.initialize()
+            self._session = mcp_session
+            self._is_initialized = True
 
     async def aclose(self):
         """Close the MCP session."""
