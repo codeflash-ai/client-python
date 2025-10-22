@@ -47,36 +47,41 @@ class OCRImageObject(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["image_base64", "image_annotation"]
-        nullable_fields = [
+        # Precompute sets for fast membership tests
+        optional_fields_set = {"image_base64", "image_annotation"}
+        nullable_fields_set = {
             "top_left_x",
             "top_left_y",
             "bottom_right_x",
             "bottom_right_y",
             "image_base64",
             "image_annotation",
-        ]
-        null_default_fields = []
+        }
+        null_default_fields_set = set()
 
+        # Handler is called once up front (no change)
         serialized = handler(self)
 
+        # Pre-fetch fields for efficiency
+        model_fields = type(self).model_fields
+        field_set = self.__pydantic_fields_set__
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        # Loop using local variables for fast lookup, avoid repeated lookups
+        for n, f in model_fields.items():
             k = f.alias or n
-            val = serialized.get(k)
-            serialized.pop(k, None)
+            val = serialized.pop(k, None)  # Pop here to avoid double dict lookup
 
-            optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            optional_nullable = k in optional_fields_set and k in nullable_fields_set
+            # Intersection returns a set; check if non-empty for is_set
+            # Optimize by not actually producing the intersection set object
+            is_set = (n in field_set) or (k in null_default_fields_set)  # pylint: disable=no-member
 
+            # Avoid repeated "val is not None" and "val != UNSET_SENTINEL" checks where possible
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields_set or (optional_nullable and is_set)
             ):
                 m[k] = val
 
