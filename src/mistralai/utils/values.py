@@ -52,21 +52,26 @@ def match_status_codes(status_codes: List[str], status_code: int) -> bool:
 
 T = TypeVar("T")
 
+
 def cast_partial(typ):
     return partial(cast, typ)
+
 
 def get_global_from_env(
     value: Optional[T], env_key: str, type_cast: Callable[[str], T]
 ) -> Optional[T]:
     if value is not None:
         return value
-    env_value = os.getenv(env_key)
-    if env_value is not None:
-        try:
-            return type_cast(env_value)
-        except ValueError:
-            pass
-    return None
+
+    # Use os.environ.get for slightly faster access than os.getenv
+    env_value = os.environ.get(env_key)
+    if env_value is None:
+        return None
+
+    try:
+        return type_cast(env_value)
+    except ValueError:
+        return None
 
 
 def match_response(
