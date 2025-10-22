@@ -52,8 +52,10 @@ def match_status_codes(status_codes: List[str], status_code: int) -> bool:
 
 T = TypeVar("T")
 
+
 def cast_partial(typ):
     return partial(cast, typ)
+
 
 def get_global_from_env(
     value: Optional[T], env_key: str, type_cast: Callable[[str], T]
@@ -134,4 +136,6 @@ def _get_serialized_params(
 
 
 def _is_set(value: Any) -> bool:
-    return value is not None and not isinstance(value, Unset)
+    # Instance checks are more expensive than identity and None checks
+    # Short-circuit if value is None or value is Unset
+    return value is not None and value is not Unset
