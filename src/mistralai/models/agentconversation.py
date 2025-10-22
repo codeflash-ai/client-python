@@ -42,29 +42,32 @@ class AgentConversation(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["name", "description", "object"]
-        nullable_fields = ["name", "description"]
-        null_default_fields = []
+        optional_fields_set = {"name", "description", "object"}
+        nullable_fields_set = {"name", "description"}
+        null_default_fields_set = set()
 
         serialized = handler(self)
-
         m = {}
 
-        for n, f in type(self).model_fields.items():
-            k = f.alias or n
-            val = serialized.get(k)
-            serialized.pop(k, None)
+        # Precompute intersections for the whole set of fields set for efficient lookups
+        fields_set = self.__pydantic_fields_set__
 
-            optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+        # Store model_fields.items locally for faster lookup
+        model_fields_items = type(self).model_fields.items()
+
+        for n, f in model_fields_items:
+            k = f.alias or n
+            # Use pop only if value exists, otherwise fallback directly to None without scanning twice
+            val = serialized.pop(k, None)
+
+            # Combined field property checks
+            optional_nullable = k in optional_fields_set and k in nullable_fields_set
+            is_set = n in fields_set or k in null_default_fields_set  # pylint: disable=no-member
 
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields_set or (optional_nullable and is_set)
             ):
                 m[k] = val
 
