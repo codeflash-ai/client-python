@@ -25,30 +25,30 @@ class MetricOut(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["train_loss", "valid_loss", "valid_mean_token_accuracy"]
-        nullable_fields = ["train_loss", "valid_loss", "valid_mean_token_accuracy"]
-        null_default_fields = []
+        # Move repeated lists outside the loop to avoid recreating them each time
+        optional_fields = {"train_loss", "valid_loss", "valid_mean_token_accuracy"}
+        nullable_fields = optional_fields  # they are the same elements, so re-use reference
+        null_default_fields = set()
 
         serialized = handler(self)
-
         m = {}
 
-        for n, f in type(self).model_fields.items():
-            k = f.alias or n
-            val = serialized.get(k)
-            serialized.pop(k, None)
+        # Pre-resolve fields and alias map to avoid repeated attribute access and lookups
+        fields = type(self).model_fields
 
-            optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+        # Precompute intersection for __pydantic_fields_set__ once
+        fields_set = self.__pydantic_fields_set__
+
+        for n, f in fields.items():
+            k = f.alias or n
+            val = serialized.pop(k, None)  # pop() returns value & removes key if present
+
+            optional_nullable = k in optional_fields  # and k in nullable_fields (always true: sets are equal)
+            is_set = (n in fields_set) or (k in null_default_fields)  # using 'in' for O(1)
 
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
-            elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
-            ):
+            elif val != UNSET_SENTINEL and (k not in optional_fields or (optional_nullable and is_set)):
                 m[k] = val
 
         return m
