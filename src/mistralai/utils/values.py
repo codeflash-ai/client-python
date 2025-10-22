@@ -22,9 +22,15 @@ def match_content_type(content_type: str, pattern: str) -> bool:
     if pattern in (content_type, "*", "*/*"):
         return True
 
-    msg = Message()
-    msg["content-type"] = content_type
-    media_type = msg.get_content_type()
+    # Parse content type manually for better performance
+    ctype_main = content_type.lower().split(";", 1)[0].strip()
+    parts = ctype_main.split("/")
+    if len(parts) != 2:
+        msg = Message()
+        msg["content-type"] = content_type
+        media_type = msg.get_content_type()
+    else:
+        media_type = f"{parts[0]}/{parts[1]}"
 
     if media_type == pattern:
         return True
@@ -52,8 +58,10 @@ def match_status_codes(status_codes: List[str], status_code: int) -> bool:
 
 T = TypeVar("T")
 
+
 def cast_partial(typ):
     return partial(cast, typ)
+
 
 def get_global_from_env(
     value: Optional[T], env_key: str, type_cast: Callable[[str], T]
