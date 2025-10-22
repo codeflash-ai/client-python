@@ -2,7 +2,6 @@
 
 from datetime import datetime
 from enum import Enum
-from email.message import Message
 from functools import partial
 import os
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union, cast
@@ -22,9 +21,7 @@ def match_content_type(content_type: str, pattern: str) -> bool:
     if pattern in (content_type, "*", "*/*"):
         return True
 
-    msg = Message()
-    msg["content-type"] = content_type
-    media_type = msg.get_content_type()
+    media_type = _parse_content_type(content_type)
 
     if media_type == pattern:
         return True
@@ -41,19 +38,26 @@ def match_status_codes(status_codes: List[str], status_code: int) -> bool:
     if "default" in status_codes:
         return True
 
-    for code in status_codes:
-        if code == str(status_code):
-            return True
+    status_code_str = str(status_code)
+    status_code_first = status_code_str[:1]
+    # Set lookup is much faster for "exact" codes
+    status_codes_set = set(status_codes)
+    if status_code_str in status_codes_set:
+        return True
 
-        if code.endswith("XX") and code.startswith(str(status_code)[:1]):
+    # Scan for patterns like "2XX" - most lists are small
+    for code in status_codes:
+        if code.endswith("XX") and code.startswith(status_code_first):
             return True
     return False
 
 
 T = TypeVar("T")
 
+
 def cast_partial(typ):
     return partial(cast, typ)
+
 
 def get_global_from_env(
     value: Optional[T], env_key: str, type_cast: Callable[[str], T]
@@ -74,7 +78,8 @@ def match_response(
 ) -> bool:
     codes = code if isinstance(code, list) else [code]
     return match_status_codes(codes, response.status_code) and match_content_type(
-        response.headers.get("content-type", "application/octet-stream"), content_type
+        response.headers.get("content-type", "application/octet-stream"),
+        content_type,
     )
 
 
@@ -135,3 +140,12 @@ def _get_serialized_params(
 
 def _is_set(value: Any) -> bool:
     return value is not None and not isinstance(value, Unset)
+
+
+def _parse_content_type(content_type: str) -> str:
+    # Fast manual parse of "type/subtype; param=value"
+    # Ignores parameters, strips spaces, returns "type/subtype"
+    semi = content_type.find(";")
+    if semi != -1:
+        content_type = content_type[:semi]
+    return content_type.strip().lower()
