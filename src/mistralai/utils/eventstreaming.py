@@ -241,8 +241,7 @@ def _peek_sequence(position: int, buffer: bytearray, sequence: bytes):
     if len(sequence) > (len(buffer) - position):
         return None
 
-    for i, seq in enumerate(sequence):
-        if buffer[position + i] != seq:
-            return None
+    if buffer[position : position + len(sequence)] != sequence:
+        return None
 
     return sequence
