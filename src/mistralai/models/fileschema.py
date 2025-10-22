@@ -61,29 +61,32 @@ class FileSchema(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["num_lines", "mimetype", "signature"]
-        nullable_fields = ["num_lines", "mimetype", "signature"]
-        null_default_fields = []
+        optional_fields = {"num_lines", "mimetype", "signature"}
+        nullable_fields = optional_fields
+        null_default_fields = set()
 
         serialized = handler(self)
 
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        fields_set = self.__pydantic_fields_set__
+        model_fields = type(self).model_fields
+
+        # Precompute the intersection once per field to avoid repeated set operation
+        for n, f in model_fields.items():
             k = f.alias or n
-            val = serialized.get(k)
-            serialized.pop(k, None)
+            val = serialized.pop(k, None)
 
-            optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            optional_nullable = (
+                k in optional_fields
+            )  # always true here since sets are equal
+            is_set = n in fields_set or k in null_default_fields  # pylint: disable=no-member
 
+            # Combine checks to minimize branches
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
