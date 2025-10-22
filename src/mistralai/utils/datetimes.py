@@ -3,6 +3,8 @@
 from datetime import datetime
 import sys
 
+_IS_PY311_OR_GREATER = sys.version_info >= (3, 11)
+
 
 def parse_datetime(datetime_string: str) -> datetime:
     """
@@ -12,12 +14,12 @@ def parse_datetime(datetime_string: str) -> datetime:
     encapsulates the necessary extra logic.
     """
     # Python 3.11 and later can parse RFC 3339 directly
-    if sys.version_info >= (3, 11):
+    if _IS_PY311_OR_GREATER:
         return datetime.fromisoformat(datetime_string)
-    
+
     # For Python 3.10 and earlier, a common ValueError is trailing 'Z' suffix,
     # so fix that upfront.
-    if datetime_string.endswith("Z"):
+    if datetime_string and datetime_string[-1] == "Z":
         datetime_string = datetime_string[:-1] + "+00:00"
 
     return datetime.fromisoformat(datetime_string)
