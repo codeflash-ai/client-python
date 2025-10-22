@@ -38,22 +38,26 @@ def match_content_type(content_type: str, pattern: str) -> bool:
 
 
 def match_status_codes(status_codes: List[str], status_code: int) -> bool:
-    if "default" in status_codes:
+    codes_set = set(status_codes)
+    if "default" in codes_set:
         return True
 
-    for code in status_codes:
-        if code == str(status_code):
-            return True
+    status_code_str = str(status_code)
+    if status_code_str in codes_set:
+        return True
 
-        if code.endswith("XX") and code.startswith(str(status_code)[:1]):
+    for code in codes_set:
+        if code.endswith("XX") and code.startswith(status_code_str[:1]):
             return True
     return False
 
 
 T = TypeVar("T")
 
+
 def cast_partial(typ):
     return partial(cast, typ)
+
 
 def get_global_from_env(
     value: Optional[T], env_key: str, type_cast: Callable[[str], T]
