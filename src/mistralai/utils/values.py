@@ -41,19 +41,23 @@ def match_status_codes(status_codes: List[str], status_code: int) -> bool:
     if "default" in status_codes:
         return True
 
+    status_code_str = str(status_code)
+
     for code in status_codes:
-        if code == str(status_code):
+        if code == status_code_str:
             return True
 
-        if code.endswith("XX") and code.startswith(str(status_code)[:1]):
+        if code.endswith("XX") and code.startswith(status_code_str[:1]):
             return True
     return False
 
 
 T = TypeVar("T")
 
+
 def cast_partial(typ):
     return partial(cast, typ)
+
 
 def get_global_from_env(
     value: Optional[T], env_key: str, type_cast: Callable[[str], T]
