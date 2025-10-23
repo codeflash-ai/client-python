@@ -67,19 +67,52 @@ def reconstitute_message_content(
     chunks: list[MessageOutputEventContent],
 ) -> MessageOutputEntryContent:
     """Given a list of MessageOutputEventContent, recreate a normalised MessageOutputEntryContent."""
-    if all(isinstance(chunk, str) for chunk in chunks):
-        return "".join(typing.cast(list[str], chunks))
-    content: list[MessageOutputContentChunks] = []
+    if not chunks:
+        # Fast path for empty input
+        return ""  # Preserves behavior for empty chunk lists
+
+    # Optimize `all(isinstance(chunk, str) for chunk in chunks)`
+    first_non_str = None
     for chunk in chunks:
+        if not isinstance(chunk, str):
+            first_non_str = chunk
+            break
+    if first_non_str is None:
+        # All are str, can join quickly
+        return "".join(typing.cast(list[str], chunks))
+
+    # Preallocate output list for better append performance
+    content: list[MessageOutputContentChunks] = []
+
+    # Use local variable for content[-1] referencing
+    append_content = content.append
+
+    # Merge consecutive TextChunks inline for memory efficiency
+    last_text_chunk = None
+    for chunk in chunks:
+        # Coerce str directly to TextChunk (minimize isinstance tests)
         if isinstance(chunk, str):
             chunk = TextChunk(text=chunk)
-        if isinstance(chunk, TextChunk):
-            if len(content) and isinstance(content[-1], TextChunk):
-                content[-1].text += chunk.text
+            # Fast path since we know it's a TextChunk
+            if last_text_chunk is not None:
+                last_text_chunk.text += chunk.text
             else:
-                content.append(chunk)
-        else:
-            content.append(chunk)
+                append_content(chunk)
+                last_text_chunk = chunk
+            continue
+
+        if isinstance(chunk, TextChunk):
+            if last_text_chunk is not None:
+                last_text_chunk.text += chunk.text
+            else:
+                append_content(chunk)
+                last_text_chunk = chunk
+            continue
+
+        # Non-TextChunk: no merging possible, just append; reset last_text_chunk
+        append_content(chunk)
+        last_text_chunk = None
+
     return content
 
 
