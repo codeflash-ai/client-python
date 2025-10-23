@@ -92,10 +92,11 @@ def reconstitue_entries(
     received_event_tracker: dict[int, list[ConversationEventsData]],
 ) -> list[RunOutputEntries]:
     """Given a list of events, recreate the corresponding entries."""
+    sorted_items = sorted(received_event_tracker.items())
     run_entries: list[RunOutputEntries] = []
-    for idx, events in sorted(received_event_tracker.items(), key=lambda x: x[0]):
+    for idx, events in sorted_items:
         first_event = events[0]
-        if isinstance(first_event, MessageOutputEvent):
+        if type(first_event) is MessageOutputEvent:
             message_events = typing.cast(list[MessageOutputEvent], events)
             run_entries.append(
                 MessageOutputEntry(
@@ -111,7 +112,7 @@ def reconstitue_entries(
                     role=first_event.role,
                 )
             )
-        elif isinstance(first_event, FunctionCallEvent):
+        elif type(first_event) is FunctionCallEvent:
             function_call_events = typing.cast(list[FunctionCallEvent], events)
             run_entries.append(
                 FunctionCallEntry(
