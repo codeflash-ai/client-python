@@ -46,7 +46,7 @@ class MCPClientSSE(MCPClientBase):
 
     def __init__(
         self,
-        sse_params: SSEServerParams,
+        sse_params: "SSEServerParams",
         name: Optional[str] = None,
         oauth_params: Optional[OAuthParams] = None,
         auth_token: Optional[OAuth2Token] = None,
@@ -55,6 +55,8 @@ class MCPClientSSE(MCPClientBase):
         self._sse_params = sse_params
         self._oauth_params: Optional[OAuthParams] = oauth_params
         self._auth_token: Optional[OAuth2Token] = auth_token
+        self._oauth_client: Optional[AsyncOAuth2Client] = None
+        self._oauth_client_params: Optional[OAuthParams] = None
 
     @cached_property
     def base_url(self) -> str:
@@ -68,14 +70,21 @@ class MCPClientSSE(MCPClientBase):
 
     async def get_auth_url_and_state(self, redirect_url: str) -> tuple[str, str]:
         """Create the authorization url for client to start oauth flow."""
-        if self._oauth_params is None:
+        oauth_params = self._oauth_params
+        if oauth_params is None:
             raise MCPAuthException(
                 "Can't generate an authorization url without oauth_params being set, "
                 "make sure the oauth params have been set."
             )
-        oauth_client = AsyncOAuth2Client.from_oauth_params(self._oauth_params)
+
+        # Only reconstruct client if params have changed or not yet initialized
+        if self._oauth_client is None or self._oauth_client_params is not oauth_params:
+            self._oauth_client = AsyncOAuth2Client.from_oauth_params(oauth_params)
+            self._oauth_client_params = oauth_params
+
+        oauth_client = self._oauth_client
         auth_url, state = oauth_client.create_authorization_url(
-            self._oauth_params.scheme.authorization_url, redirect_uri=redirect_url
+            oauth_params.scheme.authorization_url, redirect_uri=redirect_url
         )
         return auth_url, state
 
