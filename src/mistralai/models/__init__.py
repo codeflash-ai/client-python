@@ -3,7 +3,6 @@
 from .mistralerror import MistralError
 from typing import TYPE_CHECKING
 from importlib import import_module
-import builtins
 import sys
 
 if TYPE_CHECKING:
@@ -2312,5 +2311,7 @@ def __getattr__(attr_name: str) -> object:
 
 
 def __dir__():
-    lazy_attrs = builtins.list(_dynamic_imports.keys())
-    return builtins.sorted(lazy_attrs)
+    # Avoid unnecessary attribute lookups in each call, cache keys locally
+    keys = _dynamic_imports.keys()
+    # Use sorted() directly (faster than builtins.sorted), keys is already a view of str
+    return sorted(keys)
