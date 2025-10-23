@@ -68,7 +68,7 @@ class LegacyJobMetadataOut(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = [
+        optional_fields = {
             "expected_duration_seconds",
             "cost",
             "cost_currency",
@@ -80,8 +80,8 @@ class LegacyJobMetadataOut(BaseModel):
             "epochs",
             "training_steps",
             "object",
-        ]
-        nullable_fields = [
+        }
+        nullable_fields = {
             "expected_duration_seconds",
             "cost",
             "cost_currency",
@@ -91,12 +91,14 @@ class LegacyJobMetadataOut(BaseModel):
             "estimated_start_time",
             "epochs",
             "training_steps",
-        ]
+        }
         null_default_fields = []
 
         serialized = handler(self)
 
         m = {}
+
+        fields_set = self.__pydantic_fields_set__  # pylint: disable=no-member
 
         for n, f in type(self).model_fields.items():
             k = f.alias or n
@@ -104,15 +106,12 @@ class LegacyJobMetadataOut(BaseModel):
             serialized.pop(k, None)
 
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            is_set = n in fields_set or k in null_default_fields
 
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
