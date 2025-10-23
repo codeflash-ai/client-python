@@ -34,30 +34,32 @@ class GithubRepositoryOut(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["type", "ref", "weight"]
-        nullable_fields = ["ref"]
-        null_default_fields = []
+        optional_fields = {"type", "ref", "weight"}
+        nullable_fields = {"ref"}
+        null_default_fields = set()
+
+        # Avoid repeated lookups
+        model_fields = type(self).model_fields
+        fields_set = self.__pydantic_fields_set__
+        # Precompute intersection once
+        intersection_fn = fields_set.__contains__
 
         serialized = handler(self)
-
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        for n, f in model_fields.items():
             k = f.alias or n
-            val = serialized.get(k)
-            serialized.pop(k, None)
-
-            optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            val = serialized.pop(k, None)  # Get and remove in one step
 
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
-            elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
-            ):
-                m[k] = val
+            else:
+                optional_nullable = k in optional_fields and k in nullable_fields
+                is_set = intersection_fn(n) or k in null_default_fields
+                # Only evaluation if needed
+                if val != UNSET_SENTINEL and (
+                    k not in optional_fields or (optional_nullable and is_set)
+                ):
+                    m[k] = val
 
         return m
