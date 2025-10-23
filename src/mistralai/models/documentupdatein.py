@@ -15,29 +15,32 @@ class DocumentUpdateIn(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["name"]
-        nullable_fields = ["name"]
-        null_default_fields = []
+        optional_fields = {"name"}
+        nullable_fields = {"name"}
+        null_default_fields = set()
 
         serialized = handler(self)
 
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        fields_set = self.__pydantic_fields_set__  # pylint: disable=no-member
+        model_fields = type(self).model_fields
+
+        for n, f in model_fields.items():
             k = f.alias or n
             val = serialized.get(k)
-            serialized.pop(k, None)
+            # Remove key from serialized only if it exists
+            if k in serialized:
+                serialized.pop(k)
 
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            is_set = n in fields_set or k in null_default_fields
 
-            if val is not None and val != UNSET_SENTINEL:
+            # Fast identity checks and value checks
+            if val is not None and val is not UNSET_SENTINEL:
                 m[k] = val
-            elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+            elif val is not UNSET_SENTINEL and (
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
