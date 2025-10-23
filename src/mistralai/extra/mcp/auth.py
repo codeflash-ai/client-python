@@ -33,10 +33,12 @@ class AsyncOAuth2Client(AsyncOAuth2ClientBase):
 
     @classmethod
     def from_oauth_params(cls, oauth_params: OAuthParams) -> "AsyncOAuth2Client":
+        # Store attribute access in locals for micro-optimization in this tight path
+        scheme = oauth_params.scheme
         return cls(
             client_id=oauth_params.client_id,
             client_secret=oauth_params.client_secret,
-            scope=oauth_params.scheme.scope,
+            scope=scheme.scope,
         )
 
 
