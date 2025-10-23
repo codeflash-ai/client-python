@@ -64,41 +64,42 @@ class DocumentOut(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = [
+        # Use sets for O(1) lookup in membership tests
+        optional_fields = {
             "summary",
             "last_processed_at",
             "number_of_pages",
             "tokens_processing_main_content",
             "tokens_processing_summary",
-        ]
-        nullable_fields = [
+        }
+        nullable_fields = {
             "summary",
             "last_processed_at",
             "number_of_pages",
             "tokens_processing_main_content",
             "tokens_processing_summary",
-        ]
-        null_default_fields = []
+        }
+        null_default_fields = set()
+        # Only calculate intersection once
+        fields_set = self.__pydantic_fields_set__
 
         serialized = handler(self)
-
         m = {}
 
+        # Avoid popping from the original dict on every field. Instead,
+        # build a set of all keys to process and only take values as needed.
         for n, f in type(self).model_fields.items():
             k = f.alias or n
+            # Use .get() directly, do not pop; no need to mutate
             val = serialized.get(k)
-            serialized.pop(k, None)
 
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            is_set = n in fields_set or k in null_default_fields  # pylint: disable=no-member
 
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
