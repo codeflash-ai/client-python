@@ -2,7 +2,6 @@
 
 from datetime import datetime
 from enum import Enum
-from email.message import Message
 from functools import partial
 import os
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union, cast
@@ -22,10 +21,7 @@ def match_content_type(content_type: str, pattern: str) -> bool:
     if pattern in (content_type, "*", "*/*"):
         return True
 
-    msg = Message()
-    msg["content-type"] = content_type
-    media_type = msg.get_content_type()
-
+    media_type = content_type.split(";")[0].strip().lower()
     if media_type == pattern:
         return True
 
@@ -41,19 +37,23 @@ def match_status_codes(status_codes: List[str], status_code: int) -> bool:
     if "default" in status_codes:
         return True
 
+    status_code_str = str(status_code)
+
     for code in status_codes:
-        if code == str(status_code):
+        if code == status_code_str:
             return True
 
-        if code.endswith("XX") and code.startswith(str(status_code)[:1]):
+        if code.endswith("XX") and code.startswith(status_code_str[:1]):
             return True
     return False
 
 
 T = TypeVar("T")
 
+
 def cast_partial(typ):
     return partial(cast, typ)
+
 
 def get_global_from_env(
     value: Optional[T], env_key: str, type_cast: Callable[[str], T]
