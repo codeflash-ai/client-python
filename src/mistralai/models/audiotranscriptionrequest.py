@@ -60,7 +60,8 @@ class AudioTranscriptionRequest(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = [
+        # Constants for fast lookup: convert lists to sets for O(1) membership testing
+        optional_fields_set = {
             "file",
             "file_url",
             "file_id",
@@ -68,29 +69,36 @@ class AudioTranscriptionRequest(BaseModel):
             "temperature",
             "stream",
             "timestamp_granularities",
-        ]
-        nullable_fields = ["file_url", "file_id", "language", "temperature"]
-        null_default_fields = []
+        }
+        nullable_fields_set = {"file_url", "file_id", "language", "temperature"}
+        null_default_fields_set = set()  # remains empty as in original
 
         serialized = handler(self)
 
         m = {}
 
-        for n, f in type(self).model_fields.items():
-            k = f.alias or n
-            val = serialized.get(k)
-            serialized.pop(k, None)
+        fields_set = self.__pydantic_fields_set__  # pylint: disable=no-member
+        model_fields = type(self).model_fields
 
-            optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+        # Avoid repeated lookups and allocation in loop: precompute which fields are both optional and nullable
+        optional_nullable_fields = optional_fields_set & nullable_fields_set
+
+        # Use .items() directly; avoid repeated get/pop calls by saving alias lookup
+        for n, f in model_fields.items():
+            k = f.alias or n
+            val = serialized.pop(
+                k, None
+            )  # Do pop right away; also covers .get(k) usage
+
+            optional_nullable = k in optional_nullable_fields
+
+            # Use set intersection boolean directly, no need to allocate intermediate set object
+            is_set = (n in fields_set) or (k in null_default_fields_set)
 
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields_set or (optional_nullable and is_set)
             ):
                 m[k] = val
 
