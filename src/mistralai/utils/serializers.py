@@ -13,6 +13,7 @@ from pydantic import ConfigDict, create_model
 from pydantic_core import from_json
 
 from ..types.basemodel import BaseModel, Nullable, OptionalNullable, Unset
+from functools import lru_cache
 
 
 def serialize_decimal(as_str: bool):
@@ -157,14 +158,8 @@ def marshal_json(val, typ):
     if is_nullable(typ) and val is None:
         return "null"
 
-    marshaller = create_model(
-        "Marshaller",
-        body=(typ, ...),
-        __config__=ConfigDict(populate_by_name=True, arbitrary_types_allowed=True),
-    )
-
+    marshaller = _get_marshaller_model(typ)
     m = marshaller(body=val)
-
     d = m.model_dump(by_alias=True, mode="json", exclude_none=True)
 
     if len(d) == 0:
@@ -178,7 +173,7 @@ def is_nullable(field):
     if origin is Nullable or origin is OptionalNullable:
         return True
 
-    if not origin is Union or type(None) not in get_args(field):
+    if origin is not Union or type(None) not in get_args(field):
         return False
 
     for arg in get_args(field):
@@ -247,3 +242,12 @@ def _get_typing_objects_by_name_of(name: str) -> Tuple[Any, ...]:
             f"Neither typing nor typing_extensions has an object called {name!r}"
         )
     return result
+
+
+@lru_cache(maxsize=128)
+def _get_marshaller_model(typ):
+    return create_model(
+        "Marshaller",
+        body=(typ, ...),
+        __config__=ConfigDict(populate_by_name=True, arbitrary_types_allowed=True),
+    )
