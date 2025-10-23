@@ -136,9 +136,8 @@ def _parse_security_scheme_value(
     scheme_type = scheme_metadata.scheme_type
     sub_type = scheme_metadata.sub_type
 
-    header_name = security_metadata.get_field_name(field_name)
-
     if scheme_type == "apiKey":
+        header_name = security_metadata.get_field_name(field_name)
         if sub_type == "header":
             headers[header_name] = value
         elif sub_type == "query":
@@ -146,12 +145,15 @@ def _parse_security_scheme_value(
         else:
             raise ValueError("sub type {sub_type} not supported")
     elif scheme_type == "openIdConnect":
+        header_name = security_metadata.get_field_name(field_name)
         headers[header_name] = _apply_bearer(value)
     elif scheme_type == "oauth2":
         if sub_type != "client_credentials":
+            header_name = security_metadata.get_field_name(field_name)
             headers[header_name] = _apply_bearer(value)
     elif scheme_type == "http":
         if sub_type == "bearer":
+            header_name = security_metadata.get_field_name(field_name)
             headers[header_name] = _apply_bearer(value)
         elif sub_type == "custom":
             return
