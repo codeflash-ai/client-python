@@ -28,6 +28,8 @@ class BaseSDK:
     ) -> None:
         self.sdk_configuration = sdk_config
         self.parent_ref = parent_ref
+        # Initialize cache
+        self._get_url_cache = {}
 
     def _get_url(self, base_url, url_variables):
         sdk_url, sdk_variables = self.sdk_configuration.get_server_details()
@@ -38,7 +40,23 @@ class BaseSDK:
         if url_variables is None:
             url_variables = sdk_variables
 
-        return utils.template_url(base_url, url_variables)
+        # Cache key based on base_url and url_variables (converted to immutable)
+        _key = (
+            base_url,
+            frozenset(url_variables.items()) if url_variables else None,
+        )
+        cache = self._get_url_cache
+        if _key in cache:
+            return cache[_key]
+
+        # Directly use utils.template_url (uses str.replace internally, as read-only)
+        result = utils.template_url(base_url, url_variables)
+        # Simple LRU cache logic
+        if len(cache) >= self._GET_URL_CACHE_SIZE:
+            # Remove oldest item
+            cache.pop(next(iter(cache)))
+        cache[_key] = result
+        return result
 
     def _build_request_async(
         self,
