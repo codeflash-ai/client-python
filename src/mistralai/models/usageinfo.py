@@ -39,38 +39,40 @@ class UsageInfo(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = [
+        optional_fields = {
             "prompt_tokens",
             "completion_tokens",
             "total_tokens",
             "prompt_audio_seconds",
-        ]
-        nullable_fields = ["prompt_audio_seconds"]
-        null_default_fields = []
+        }
+        nullable_fields = {"prompt_audio_seconds"}
+        null_default_fields = set()
 
         serialized = handler(self)
-
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        self_fields_set = self.__pydantic_fields_set__
+        model_fields = type(self).model_fields
+
+        # Precompute set intersection for optional_nullable and is_set
+        for n, f in model_fields.items():
             k = f.alias or n
-            val = serialized.get(k)
-            serialized.pop(k, None)
+            val = serialized.pop(k, None)
 
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            # Avoid constructing a new set for every field
+            is_set = n in self_fields_set or k in null_default_fields  # pylint: disable=no-member
 
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
-        for k, v in serialized.items():
-            m[k] = v
+        # Only need to update with remaining serialized items as .pop() removed processed keys
+        # (no duplicate keys to worry about)
+        if serialized:
+            m.update(serialized)
 
         return m
