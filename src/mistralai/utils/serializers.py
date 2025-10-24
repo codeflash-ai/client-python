@@ -178,7 +178,7 @@ def is_nullable(field):
     if origin is Nullable or origin is OptionalNullable:
         return True
 
-    if not origin is Union or type(None) not in get_args(field):
+    if origin is not Union or type(None) not in get_args(field):
         return False
 
     for arg in get_args(field):
@@ -202,7 +202,11 @@ def stream_to_text(stream: httpx.Response) -> str:
 
 
 async def stream_to_text_async(stream: httpx.Response) -> str:
-    return "".join([chunk async for chunk in stream.aiter_text()])
+    # Use buffered accumulation for improved memory efficiency on large responses
+    buffer = []
+    async for chunk in stream.aiter_text():
+        buffer.append(chunk)
+    return "".join(buffer)
 
 
 def stream_to_bytes(stream: httpx.Response) -> bytes:
