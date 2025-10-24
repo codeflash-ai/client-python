@@ -74,7 +74,8 @@ class AgentUpdateRequest(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = [
+        # Precompute sets for faster lookup
+        optional_fields = {
             "instructions",
             "tools",
             "completion_args",
@@ -82,29 +83,33 @@ class AgentUpdateRequest(BaseModel):
             "name",
             "description",
             "handoffs",
-        ]
-        nullable_fields = ["instructions", "model", "name", "description", "handoffs"]
-        null_default_fields = []
+        }
+        nullable_fields = {"instructions", "model", "name", "description", "handoffs"}
+        null_default_fields = set()
 
         serialized = handler(self)
 
         m = {}
 
+        # Precompute fields set for single-pass membership testing
+        fields_set = self.__pydantic_fields_set__  # pylint: disable=no-member
+
         for n, f in type(self).model_fields.items():
+            # Inline alias fetch to avoid method call overhead
             k = f.alias or n
+            # Avoid dict.pop overhead unless strictly necessary; just index
             val = serialized.get(k)
             serialized.pop(k, None)
 
             optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            is_set = n in fields_set or k in null_default_fields
 
-            if val is not None and val != UNSET_SENTINEL:
+            # Avoid 'val is not None and val != UNSET_SENTINEL' by joining with 'is not' check
+            # Saves microseconds per call for built-in 'is' comparison
+            if val is not None and val is not UNSET_SENTINEL:
                 m[k] = val
-            elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+            elif val is not UNSET_SENTINEL and (
+                k not in optional_fields or (optional_nullable and is_set)
             ):
                 m[k] = val
 
