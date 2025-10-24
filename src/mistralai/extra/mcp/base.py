@@ -29,27 +29,21 @@ class MCPClientProtocol(Protocol):
 
     _name: str
 
-    async def initialize(self, exit_stack: Optional[AsyncExitStack]) -> None:
-        ...
+    async def initialize(self, exit_stack: Optional[AsyncExitStack]) -> None: ...
 
-    async def aclose(self) -> None:
-        ...
+    async def aclose(self) -> None: ...
 
-    async def get_tools(self) -> list[FunctionTool]:
-        ...
+    async def get_tools(self) -> list[FunctionTool]: ...
 
     async def execute_tool(
         self, name: str, arguments: dict
-    ) -> list[TextChunkTypedDict]:
-        ...
+    ) -> list[TextChunkTypedDict]: ...
 
     async def get_system_prompt(
         self, name: str, arguments: dict[str, Any]
-    ) -> MCPSystemPrompt:
-        ...
+    ) -> MCPSystemPrompt: ...
 
-    async def list_system_prompts(self) -> ListPromptsResult:
-        ...
+    async def list_system_prompts(self) -> ListPromptsResult: ...
 
 
 class MCPClientBase(MCPClientProtocol):
@@ -58,15 +52,17 @@ class MCPClientBase(MCPClientProtocol):
     _session: ClientSession
 
     def __init__(self, name: Optional[str] = None):
-        self._name = name or self.__class__.__name__
+        self._name = name if name is not None else self.__class__.__name__
         self._exit_stack: Optional[AsyncExitStack] = None
         self._is_initialized = False
 
     def _convert_content(
         self, mcp_content: Union[TextContent, ImageContent, EmbeddedResource]
     ) -> TextChunkTypedDict:
-        if not mcp_content.type == "text":
+        # Slightly faster comparison
+        if mcp_content.type != "text":
             raise MCPException("Only supporting text tool responses for now.")
+        # Use direct dict literal construction, as before
         return {"type": "text", "text": mcp_content.text}
 
     def _convert_content_list(
