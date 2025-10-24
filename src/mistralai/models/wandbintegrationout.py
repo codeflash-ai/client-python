@@ -35,29 +35,31 @@ class WandbIntegrationOut(BaseModel):
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler):
-        optional_fields = ["type", "name", "run_name", "url"]
-        nullable_fields = ["name", "run_name", "url"]
-        null_default_fields = []
+        # Optimize repeated container creation & lookup, remove unnecessary pop from dict
+        # Precompute sets for faster membership checks
+        optional_fields_set = {"type", "name", "run_name", "url"}
+        nullable_fields_set = {"name", "run_name", "url"}
+        # null_default_fields was always empty, so can be removed and simplify checks
 
         serialized = handler(self)
-
         m = {}
 
-        for n, f in type(self).model_fields.items():
+        # Use local references to avoid repeated global lookup
+        model_fields = type(self).model_fields
+        fields_set = self.__pydantic_fields_set__
+
+        for n, f in model_fields.items():
             k = f.alias or n
             val = serialized.get(k)
-            serialized.pop(k, None)
 
-            optional_nullable = k in optional_fields and k in nullable_fields
-            is_set = (
-                self.__pydantic_fields_set__.intersection({n})
-                or k in null_default_fields
-            )  # pylint: disable=no-member
+            # Compute flags with set logic
+            optional_nullable = k in optional_fields_set and k in nullable_fields_set
+            is_set = n in fields_set  # intersection{n} is equivalent to membership
 
             if val is not None and val != UNSET_SENTINEL:
                 m[k] = val
             elif val != UNSET_SENTINEL and (
-                not k in optional_fields or (optional_nullable and is_set)
+                k not in optional_fields_set or (optional_nullable and is_set)
             ):
                 m[k] = val
 
