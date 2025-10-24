@@ -64,7 +64,7 @@ def validate_float(f):
     if f is None:
         return None
 
-    if isinstance(f, (float, Unset)):
+    if isinstance(f, float) or f is Unset:
         return f
 
     if not isinstance(f, str):
@@ -178,7 +178,7 @@ def is_nullable(field):
     if origin is Nullable or origin is OptionalNullable:
         return True
 
-    if not origin is Union or type(None) not in get_args(field):
+    if origin is not Union or type(None) not in get_args(field):
         return False
 
     for arg in get_args(field):
