@@ -90,10 +90,10 @@ def serialize_int(as_str: bool):
 
 
 def validate_int(b):
-    if b is None:
-        return None
+    if b is None or isinstance(b, int):
+        return b
 
-    if isinstance(b, (int, Unset)):
+    if b is Unset:
         return b
 
     if not isinstance(b, str):
@@ -178,7 +178,7 @@ def is_nullable(field):
     if origin is Nullable or origin is OptionalNullable:
         return True
 
-    if not origin is Union or type(None) not in get_args(field):
+    if origin is not Union or type(None) not in get_args(field):
         return False
 
     for arg in get_args(field):
